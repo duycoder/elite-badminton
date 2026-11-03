@@ -114,7 +114,8 @@ function openMenu(screen) {
   $('mSub').textContent = m.title || '';
   $('mPanel').hidden = !m.panel;
   for (const id of ['pnEdit', 'pnHelp', 'pnOnline']) $(id).hidden = m.panel !== id;
-  onlineMenu(screen === 'online');
+  $('mRooms').hidden = screen !== 'main';
+  onlineMenu(screen === 'online' || screen === 'main');   // menu chính cũng hiện danh sách phòng
   $('mList').classList.toggle('compact', m.items.length > 8);
   $('hero').hidden = !!m.panel;
   renderMenu(true);

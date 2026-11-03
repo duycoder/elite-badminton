@@ -38,5 +38,6 @@ function onMsg(m) {
 
 function show(which) {
   if (which === 'menu') openMenu('main');
+  else onlineMenu(false);
   for (const s of ['menu', 'room', 'game']) $(s).style.display = s === which ? 'block' : 'none';
   SFX.ambience(which === 'game'); }

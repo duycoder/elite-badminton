@@ -29,18 +29,25 @@ function joinRoom(code) {
   send({ t: 'join', code });
 }
 const venueName = id => (GAME && GAME.venues.find(v => v.id === id) || { name: id }).name;
-function showRooms(list) {
-  const box = $('olRooms');
-  if (!list.length) return box.replaceChildren(el('div', 'ol-empty', 'Chưa có phòng nào đang chờ.<br>Tạo phòng rồi gửi mã cho bạn bè nhé!'));
-  box.replaceChildren(...list.map(r => {
+function roomRows(list) {
+  return list.map(r => {
     const row = el('button', 'ol-room');
     row.type = 'button';
     const host = el('span', 'ol-host'); host.textContent = r.host;   // tên do người chơi gõ -> textContent
     row.append(el('b', 'ol-code', r.code), host, el('small', null, `${r.target} điểm · ${venueName(r.venue)}`), el('span', 'ol-go', 'VÀO ▶'));
     row.onclick = () => { SFX.play('ok'); joinRoom(r.code); };
     return row;
-  }));
+  });
 }
+// cùng một danh sách hiện ở 2 nơi: menu chính (tối đa 5 phòng) và sảnh ĐẤU MẠNG
+function showRooms(list) {
+  const empty = html => el('div', 'ol-empty', html);
+  $('olRooms').replaceChildren(...(list.length ? roomRows(list) : [empty('Chưa có phòng nào đang chờ.<br>Tạo phòng rồi gửi mã cho bạn bè nhé!')]));
+  $('mrList').replaceChildren(...(list.length ? roomRows(list.slice(0, 5)) : [empty('Chưa có ai mở phòng — tạo một phòng rồi rủ bạn bè vào đấu!')]));
+  $('mrCount').textContent = list.length ? list.length + ' phòng' : '';
+}
+$('mrCreate').onclick = () => { SFX.play('ok'); createRoom(); };
+$('mrCode').onclick = () => { SFX.play('ok'); openCodeDlg(); };
 
 // hộp nhập mã phòng
 function openCodeDlg() {
