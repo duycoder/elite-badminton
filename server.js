@@ -153,11 +153,33 @@ class Room {
   removeClient(id) {
     const s = this.findSeat(id);
     this.clients.delete(id);
-    if (s) {
+    if (s && !this.solo) {
+      // đấu mạng: không cho Máy vào thay — đang đấu thì xử thắng cho bên còn lại
+      this.slots[s.t][s.i] = null;
+      if (this.state === 'playing') {
+        this.state = 'over';
+        this.winner = 1 - s.t;
+        this.msg = 'Đối thủ đã rời trận — ' + (this.winner === 0 ? 'Đội Xanh' : 'Đội Đỏ') + ' THẮNG!';
+        this.msgTime = 999;
+        if (this.shuttle) this.shuttle.held = null;
+        this.fx.push(['win', W / 2, this.winner]);
+      }
+    } else if (s) {
       if (this.state === 'lobby') this.slots[s.t][s.i] = null;
       else this.makeBot(s.t, s.i);
     }
     if (this.hostId === id) this.hostId = this.clients.keys().next().value || null;
+  }
+  // đấu mạng: đủ 2 người thật mới đánh được
+  full() { return this.slots.every(team => team.every(s => s && !s.bot)); }
+  // đổi tay vợt / trang phục khi đang ở phòng chờ
+  setChar(id, char, outfit) {
+    const c = this.clients.get(id);
+    if (!c || !BY_ID[char]) return false;
+    c.char = char; if (outfit) c.outfit = outfit;
+    const seat = this.findSeat(id);
+    if (seat) Object.assign(this.slots[seat.t][seat.i], { char, outfit: c.outfit });
+    return true;
   }
   toggleBot(t, i) {
     const s = this.slots[t][i];
@@ -494,7 +516,7 @@ class Room {
     return {
       t: 'room', code: this.code, mode: this.mode, target: this.target,
       level: this.level, solo: this.solo, venue: this.venue,
-      host: this.hostId, state: this.state,
+      host: this.hostId, state: this.state, fatigue: this.fatigue,
       slots: this.slots.map(team => team.map(s => s && { name: s.name, bot: s.bot, id: s.id, look: s.look, char: s.char, gender: BY_ID[s.char].gender, outfit: s.outfit })),
     };
   }
@@ -589,7 +611,8 @@ function newCode() {
 const matchDesc = r => `${r.solo ? 'Giao hữu' : 'Phòng ' + r.code} ${r.mode} · Máy ${LEVELS[r.level].name} · vs ${
   r.players.filter(p => p.team === 1).map(p => BY_ID[p.char] ? BY_ID[p.char].name : p.name).join(' & ')}`;
 function roomList() {
-  return [...rooms.values()].filter(r => !r.solo).map(r => ({
+  return [...rooms.values()].filter(r => !r.solo && r.state === 'lobby' && !r.full()).map(r => ({
+    host: (r.clients.get(r.hostId) || {}).name || '?', venue: r.venue, target: r.target,
     code: r.code, mode: r.mode, state: r.state, level: r.level,
     humans: r.clients.size,
   }));
@@ -609,8 +632,9 @@ server.on('upgrade', (req, socket) => {
       track.hello(id, name, char);
       send(JSON.stringify({ t: 'hi', id, rooms: roomList(), game: publicData() })); }
     else if (m.t === 'list') send(JSON.stringify({ t: 'list', rooms: roomList() }));
-    else if ((m.t === 'create' || m.t === 'solo') && !room && MODES[m.mode]) {
-      room = new Room(newCode(), m.mode, m.target === 11 ? 11 : 21, id, m.level, m.venue);
+    else if ((m.t === 'create' || m.t === 'solo') && !room && (MODES[m.mode] || m.t === 'create')) {
+      room = new Room(newCode(), m.t === 'create' ? '1v1' : m.mode, m.target === 11 ? 11 : 21, id, m.level, m.venue);
+      if (m.t === 'create') room.fatigue = m.fatigue !== false;
       rooms.set(room.code, room);
       room.addClient(id, name, send, look, char, outfit);
       if (m.t === 'solo') {
@@ -635,19 +659,37 @@ server.on('upgrade', (req, socket) => {
       track.activity(id, 'Màn hình tiêu đề (xem demo)', null, null);
       send(JSON.stringify(room.lobbyInfo()));
     } else if (m.t === 'join' && !room) {
-      const r = rooms.get(String(m.code || '').toUpperCase());
-      if (!r) return send(JSON.stringify({ t: 'err', msg: 'Không tìm thấy phòng ' + m.code }));
+      const code = String(m.code || '').toUpperCase().slice(0, 8), r = rooms.get(code);
+      if (!r || r.solo) return send(JSON.stringify({ t: 'err', msg: 'Không tìm thấy phòng ' + code }));
+      if (r.state !== 'lobby') return send(JSON.stringify({ t: 'err', msg: 'Phòng ' + code + ' đang đấu, đợi trận xong nhé' }));
+      if (r.full()) return send(JSON.stringify({ t: 'err', msg: 'Phòng ' + code + ' đã đủ 2 người' }));
       room = r;
       room.addClient(id, name, send, look, char, outfit);
       track.activity(id, 'Phòng ' + room.code, 'Vào phòng mạng ' + room.code, room);
       room.broadcast(room.lobbyInfo());
       if (room.state !== 'lobby') send(JSON.stringify(room.snapshot()));
     } else if (!room) return;
+    else if (m.t === 'char' && room.state === 'lobby') {
+      if (BY_ID[m.char]) { char = m.char; outfit = cleanOutfit(m.outfit) || outfit; }
+      if (room.setChar(id, char, outfit)) room.broadcast(room.lobbyInfo());
+    }
+    else if (m.t === 'cfg' && id === room.hostId && !room.solo && room.state === 'lobby') {
+      if (m.target === 11 || m.target === 21) room.target = m.target;
+      if (VENUE_BY_ID[m.venue]) room.venue = m.venue;
+      if (typeof m.fatigue === 'boolean') room.fatigue = m.fatigue;
+      room.broadcast(room.lobbyInfo());
+    }
     else if (m.t === 'seat') { room.seat(id, m.team | 0, m.idx | 0); room.broadcast(room.lobbyInfo()); }
     else if (m.t === 'bot' && id === room.hostId && room.state === 'lobby') { room.toggleBot(m.team | 0, m.idx | 0); room.broadcast(room.lobbyInfo()); }
     else if (m.t === 'opp' && id === room.hostId && room.solo && BY_ID[m.char] && room.state !== 'playing') { room.makeBot(1, 0, m.char); room.broadcast(room.lobbyInfo()); }
     else if (m.t === 'level' && id === room.hostId && LEVELS[m.level]) { room.level = m.level; room.broadcast(room.lobbyInfo()); }
     else if (m.t === 'start' && id === room.hostId && room.state !== 'playing') {
+      if (!room.solo && !room.full()) {
+        // đấu mạng thiếu người (vd đối thủ vừa rời): quay về phòng chờ
+        room.state = 'lobby';
+        send(JSON.stringify({ t: 'err', msg: 'Cần đủ 2 người mới bắt đầu được' }));
+        return room.broadcast(room.lobbyInfo());
+      }
       room.start(); room.logged = false;
       for (const cid of room.clients.keys()) track.activity(cid, 'Đang đấu: ' + matchDesc(room), 'Bắt đầu ' + matchDesc(room), room);
       room.broadcast(room.lobbyInfo());

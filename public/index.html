@@ -10,52 +10,27 @@
 <div class="wrap">
   <h1>🏸 Cầu Lông Online</h1>
 
-  <!-- MÀN HÌNH SẢNH -->
-  <div id="lobby" style="display:none">
-    <div class="row" style="margin-bottom:14px"><button id="toMenu">◀ Về menu</button></div>
-    <div class="card">
-      <h3 style="margin-top:0">Tạo trận mới</h3>
-      <div class="row">
-        <button class="mode on" data-m="1v1">1 vs 1</button>
-        <button class="mode" data-m="1v2">1 vs 2</button>
-        <select id="target"><option value="21">Chơi tới 21 điểm</option><option value="11">Chơi nhanh 11 điểm</option></select>
-        <select id="level"><option value="easy">Máy: Dễ</option><option value="normal" selected>Máy: Vừa</option><option value="hard">Máy: Khó</option></select>
-      </div>
-      <div class="row" style="margin-top:10px">
-        <button class="pri" id="solo">🤖 Chơi với Máy</button>
-        <button class="pri" id="create">Tạo phòng chơi với bạn</button>
-      </div>
-      <p class="mute" style="margin-bottom:0">"Chơi với Máy": vào trận ngay, bạn ở Đội Xanh, các vị trí còn lại do Máy chơi.</p>
-    </div>
-    <div class="card">
-      <h3 style="margin-top:0">Vào phòng của bạn bè</h3>
-      <div class="row">
-        <input id="code" maxlength="4" placeholder="Mã phòng (VD: ABCD)" style="text-transform:uppercase;width:200px">
-        <button class="pri" id="join">Vào phòng</button>
-        <button id="refresh">Làm mới danh sách</button>
-      </div>
-      <div class="roomlist" id="rooms"></div>
-    </div>
-    <div class="err" id="err"></div>
-  </div>
-
-  <!-- MÀN HÌNH PHÒNG CHỜ -->
+  <!-- PHÒNG CHỜ ĐẤU MẠNG (1 vs 1, 2 người thật) -->
   <div id="room" style="display:none">
-    <div class="card">
-      <div class="row" style="justify-content:space-between">
-        <div><b>Phòng <span id="rcode"></span></b> · <span id="rmode"></span> · <span id="rtarget"></span> điểm · Máy <span id="rlevel"></span></div>
-        <button id="leave1">Rời phòng</button>
+    <div class="rm-top">
+      <div class="rm-title">ĐẤU MẠNG<span>1 VS 1</span></div>
+      <div class="rm-codebox">
+        <div class="rm-code"><small>MÃ PHÒNG</small><b id="rcode"></b></div>
+        <div class="rm-link"><code id="rlink"></code><button id="rcopy" type="button">📋 Sao chép link mời</button></div>
       </div>
-      <p class="mute">Gửi mã phòng (hoặc link) cho bạn bè: <code id="rlink"></code><br>
-        Bấm vào ô trống để đổi chỗ. Ô trống khi bắt đầu sẽ do <b>Máy</b> chơi.</p>
-      <div class="teams">
-        <div class="team"><h3 style="color:var(--blue)">Đội Xanh</h3><div id="t0"></div></div>
-        <div class="team"><h3 style="color:var(--red)">Đội Đỏ</h3><div id="t1"></div></div>
-      </div>
-      <div class="row" style="margin-top:10px"><button class="pri" id="start">Bắt đầu!</button>
-        <select id="rlevelsel"><option value="easy">Máy: Dễ</option><option value="normal">Máy: Vừa</option><option value="hard">Máy: Khó</option></select>
-        <span class="mute" id="waithost"></span></div>
     </div>
+    <div class="rm-vs">
+      <div class="rm-card b" id="rc0"></div>
+      <div class="rm-x">VS</div>
+      <div class="rm-card r" id="rc1"></div>
+    </div>
+    <div class="rm-cfg" id="rcfg"></div>
+    <div class="rm-foot">
+      <button id="leave1" type="button" class="rm-btn">◀ Rời phòng</button>
+      <span class="rm-wait-txt" id="waithost"></span>
+      <button id="start" type="button" class="rm-go">BẮT ĐẦU ▶</button>
+    </div>
+    <div class="rm-keys"><kbd>◀</kbd><kbd>▶</kbd> đổi tay vợt · <kbd>Enter</kbd> bắt đầu · <kbd>Esc</kbd> rời phòng</div>
   </div>
 
   <button id="sndBtn" title="Bật/tắt âm thanh (M)" aria-label="Bật/tắt âm thanh"></button>
@@ -107,6 +82,16 @@
     <div class="nm-row"><button type="button" id="nmCancel">Huỷ</button><button type="submit" class="nm-ok">XÁC NHẬN ▶</button></div>
   </div>
 </form>
+<form class="nm-dlg" id="codeDlg" hidden>
+  <div class="nm-box">
+    <div class="nm-title">VÀO PHÒNG</div>
+    <label for="cdInput">Mã phòng bạn bè gửi</label>
+    <input id="cdInput" class="cd-input" maxlength="4" autocomplete="off" placeholder="ABCD" required>
+    <div class="nm-err" id="cdErr"></div>
+    <div class="nm-row"><button type="button" id="cdCancel">Huỷ</button><button type="submit" class="nm-ok">VÀO ▶</button></div>
+  </div>
+</form>
+<div class="toast" id="toast" role="status" hidden></div>
 <div id="menu" style="display:none">
   <button class="m-me" id="meChip" type="button" title="Đổi tên">👤 <span id="meName"></span> ✎</button>
   <canvas class="m-hero" id="hero" width="360" height="620"></canvas>
@@ -126,6 +111,12 @@
           <div class="sw" id="swSkin"><b>Da:</b></div>
         </div>
       </div>
+    </div>
+    <div class="card ol-panel" id="pnOnline" hidden>
+      <h3 style="margin-top:0">Phòng đang chờ người vào</h3>
+      <div class="ol-rooms" id="olRooms"></div>
+      <p class="mute" style="margin-bottom:0">Đấu <b>1 vs 1</b> với bạn bè. Tạo phòng → gửi <b>mã 4 chữ</b> hoặc link mời → bạn vào là đấu.
+        Danh sách tự làm mới mỗi 3 giây.</p>
     </div>
     <div class="card" id="pnHelp" hidden>
       <h3 style="margin-top:0">Cách điều khiển</h3>

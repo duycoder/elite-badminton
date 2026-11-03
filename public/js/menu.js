@@ -92,7 +92,13 @@ const MENU = {
     { label: 'TẬP LUYỆN', dev: true, desc: 'Làm quen tay: 1 vs 1 với Máy Dễ, chơi tới 11 điểm.', act: () => startSolo({ mode: '1v1', target: 11, level: 'easy' }) },
     { label: 'GIAO HỮU NGẪU NHIÊN', dev: true, desc: 'Thể thức, số điểm và độ khó đều do... số phận quyết định =))',
       act: () => startSolo({ ...Object.fromEntries(Object.entries(OPTS).map(([k, o]) => [k, pick(o.vals)[0]])), venue: pick(GAME.venues).id }) },
+    { label: 'ĐẤU MẠNG', desc: 'Đấu 1 vs 1 với bạn bè qua mạng: tạo phòng rồi gửi mã, hoặc vào phòng bạn bè đã tạo.', go: 'online' },
     { label: 'HƯỚNG DẪN', desc: 'Xem cách điều khiển bằng chuột, bàn phím và cảm ứng.', go: 'help' },
+  ]},
+  online: { title: 'ĐẤU MẠNG', panel: 'pnOnline', items: [
+    { label: 'TẠO PHÒNG', desc: () => `Tạo phòng mới (${settings.target} điểm, sân ${venueName(localStorage.getItem('cl_venue') || 'arena')}) rồi gửi mã cho bạn bè. Chủ phòng đổi được cài đặt trong phòng chờ.`, act: createRoom },
+    { label: 'VÀO PHÒNG BẰNG MÃ', desc: 'Nhập mã phòng 4 chữ cái bạn bè gửi — hoặc bấm vào một phòng trong danh sách bên phải.', act: openCodeDlg },
+    BACK,
   ]},
   edit: { title: 'CHỈNH SỬA', panel: 'pnEdit', items: [BACK] },
   help: { title: 'HƯỚNG DẪN', panel: 'pnHelp', items: [BACK] },
@@ -107,7 +113,8 @@ function openMenu(screen) {
   closeWizard();
   $('mSub').textContent = m.title || '';
   $('mPanel').hidden = !m.panel;
-  for (const id of ['pnEdit', 'pnHelp']) $(id).hidden = m.panel !== id;
+  for (const id of ['pnEdit', 'pnHelp', 'pnOnline']) $(id).hidden = m.panel !== id;
+  onlineMenu(screen === 'online');
   $('mList').classList.toggle('compact', m.items.length > 8);
   $('hero').hidden = !!m.panel;
   renderMenu(true);
@@ -152,7 +159,7 @@ function menuPick(dir) {
   }
 }
 addEventListener('keydown', e => {
-  if ($('menu').style.display !== 'block' || !$('nameDlg').hidden) return;
+  if ($('menu').style.display !== 'block' || document.querySelector('.nm-dlg:not([hidden])')) return;
   if (wiz) return wizKey(e);
   if (e.target.tagName === 'INPUT') { if (e.code === 'Escape' || e.code === 'Enter') e.target.blur(); return; }
   const n = MENU[menuAt].items.length;

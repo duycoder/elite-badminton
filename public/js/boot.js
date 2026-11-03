@@ -56,6 +56,7 @@ $('nameDlg').addEventListener('submit', e => {
   showMyName();
   closeNameDlg();
   SFX.play('ok');
+  if (pendingJoin) { joinRoom(pendingJoin); pendingJoin = null; }   // đến từ link mời
 });
 $('nmCancel').onclick = () => { closeNameDlg(); SFX.play('back'); };
 $('nmInput').addEventListener('keydown', e => { if (e.code === 'Escape' && !$('nameDlg').dataset.first) { closeNameDlg(); SFX.play('back'); } });
@@ -81,7 +82,7 @@ $('splash').onclick = $('title').onclick = skip;
 
 setPhase(phase);
 if (phase === 'splash') playSplash(0);
-else { online = true; show('lobby'); }   // link mời: vào thẳng phần nối mạng
+else { show('menu'); openMenu('online'); if (needName) openNameDlg(true); }   // link mời: vào thẳng ĐẤU MẠNG (đặt tên trước nếu chưa có)
 drawPreview();
 connect();
 draw();
