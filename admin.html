@@ -1,0 +1,186 @@
+<!doctype html>
+<html lang="vi">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="robots" content="noindex">
+<title>Theo dõi · Cầu Lông Online</title>
+<style>
+  :root { --bg:#0f1a2b; --card:#18263d; --line:#2c3f5f; --txt:#e8eef8; --mute:#93a4c0; --blue:#3d8bff; --ok:#35c46b; --red:#ff5a5a; --gold:#ffd84a; }
+  * { box-sizing:border-box; }
+  body { margin:0; background:var(--bg); color:var(--txt); font:14px/1.45 system-ui, "Segoe UI", Roboto, sans-serif; }
+  .wrap { max-width:1200px; margin:0 auto; padding:20px 16px 40px; }
+  h1 { margin:0; font-size:20px; }
+  h2 { margin:0 0 10px; font-size:15px; color:var(--mute); font-weight:600; text-transform:uppercase; letter-spacing:.06em; }
+  header { display:flex; flex-wrap:wrap; gap:8px 16px; align-items:center; justify-content:space-between; margin-bottom:18px; }
+  .meta { color:var(--mute); font-size:13px; }
+  .dot { display:inline-block; width:8px; height:8px; border-radius:50%; background:var(--ok); margin-right:6px; box-shadow:0 0 0 3px rgba(53,196,107,.2); }
+  .dot.off { background:var(--red); box-shadow:0 0 0 3px rgba(255,90,90,.2); }
+  button { font:inherit; color:var(--txt); background:#22324d; border:1px solid var(--line); border-radius:8px; padding:7px 14px; cursor:pointer; }
+  button:hover { background:#2a3d5e; }
+  button.pri { background:var(--blue); border-color:var(--blue); color:#fff; }
+  .tiles { display:grid; grid-template-columns:repeat(auto-fit, minmax(160px, 1fr)); gap:12px; margin-bottom:18px; }
+  .tile { background:var(--card); border:1px solid var(--line); border-radius:12px; padding:14px 16px; }
+  .tile b { display:block; font-size:28px; font-variant-numeric:tabular-nums; }
+  .tile span { color:var(--mute); font-size:13px; }
+  .tile.live b { color:var(--ok); }
+  section { background:var(--card); border:1px solid var(--line); border-radius:12px; padding:16px; margin-bottom:18px; }
+  .grid2 { display:grid; grid-template-columns:3fr 2fr; gap:18px; }
+  .grid2 section { margin-bottom:0; }
+  @media (max-width: 900px) { .grid2 { grid-template-columns:1fr; } .grid2 section { margin-bottom:18px; } }
+  .scroll { overflow-x:auto; }
+  table { width:100%; border-collapse:collapse; font-size:13px; }
+  th { text-align:left; color:var(--mute); font-weight:600; padding:6px 8px; border-bottom:1px solid var(--line); white-space:nowrap; }
+  td { padding:7px 8px; border-bottom:1px solid rgba(44,63,95,.5); vertical-align:top; }
+  td.num { font-variant-numeric:tabular-nums; white-space:nowrap; color:var(--mute); }
+  tr:last-child td { border-bottom:0; }
+  .name { font-weight:600; }
+  .tag { display:inline-block; padding:1px 7px; border-radius:999px; font-size:12px; background:#22324d; color:var(--mute); white-space:nowrap; }
+  .st-play { color:var(--gold); }
+  .empty { color:var(--mute); padding:12px 8px; }
+  .log { max-height:560px; overflow-y:auto; }
+  .ev { display:grid; grid-template-columns:62px 1fr; gap:8px; padding:6px 0; border-bottom:1px solid rgba(44,63,95,.5); }
+  .ev:last-child { border-bottom:0; }
+  .ev time { color:var(--mute); font-variant-numeric:tabular-nums; font-size:12px; padding-top:1px; }
+  .ev small { color:var(--mute); }
+  /* đăng nhập */
+  .login { max-width:380px; margin:12vh auto 0; background:var(--card); border:1px solid var(--line); border-radius:14px; padding:24px; }
+  .login h1 { margin-bottom:6px; }
+  .login p { color:var(--mute); margin:0 0 16px; }
+  .login input { width:100%; font:15px ui-monospace, Consolas, monospace; color:var(--txt); background:#0d1626; border:1px solid var(--line); border-radius:8px; padding:10px 12px; margin-bottom:12px; }
+  .login .err { color:var(--red); min-height:20px; margin-bottom:8px; font-size:13px; }
+  [hidden] { display:none !important; }
+</style>
+</head>
+<body>
+<form class="login" id="login" hidden>
+  <h1>🔐 Trang theo dõi</h1>
+  <p>Nhập mật khẩu (UUID in ở console khi chạy server).</p>
+  <input id="key" type="password" autocomplete="current-password" placeholder="xxxxxxxx-xxxx-xxxx-xxxx-xxxxxxxxxxxx" required>
+  <div class="err" id="err"></div>
+  <button class="pri" type="submit">Vào xem</button>
+</form>
+
+<div class="wrap" id="app" hidden>
+  <header>
+    <div>
+      <h1>🏸 Cầu Lông Online · Theo dõi</h1>
+      <div class="meta"><span class="dot" id="dot"></span><span id="meta">Đang tải…</span></div>
+    </div>
+    <button id="logout" type="button">Đăng xuất</button>
+  </header>
+
+  <div class="tiles">
+    <div class="tile live"><b id="tOnline">0</b><span>Đang online</span></div>
+    <div class="tile"><b id="tVisits">0</b><span>Lượt truy cập</span></div>
+    <div class="tile"><b id="tIps">0</b><span>IP khác nhau</span></div>
+    <div class="tile"><b id="tMatches">0</b><span>Trận đã đấu xong</span></div>
+  </div>
+
+  <div class="grid2">
+    <section>
+      <h2>Đang online</h2>
+      <div class="scroll"><table>
+        <thead><tr><th>Tên</th><th>Đang làm gì</th><th>Thiết bị</th><th>IP</th><th>Vào lúc</th><th>Trận</th></tr></thead>
+        <tbody id="online"></tbody>
+      </table></div>
+    </section>
+    <section>
+      <h2>Lịch sử</h2>
+      <div class="log" id="events"></div>
+    </section>
+  </div>
+
+  <section>
+    <h2>Đã rời đi (gần nhất)</h2>
+    <div class="scroll"><table>
+      <thead><tr><th>Tên</th><th>Thiết bị</th><th>IP</th><th>Vào lúc</th><th>Ở lại</th><th>Trận</th></tr></thead>
+      <tbody id="gone"></tbody>
+    </table></div>
+  </section>
+</div>
+
+<script>
+// tên người chơi do người dùng gõ -> luôn gán bằng textContent, không dùng innerHTML
+const $ = id => document.getElementById(id);
+const el = (tag, cls, text) => { const e = document.createElement(tag); if (cls) e.className = cls; if (text != null) e.textContent = text; return e; };
+let key = null, timer = null;
+try { key = sessionStorage.getItem('cl_admin'); } catch {}
+
+const hhmm = t => new Date(t).toLocaleTimeString('vi-VN', { hour: '2-digit', minute: '2-digit' });
+const when = t => { const d = new Date(t), today = new Date().toDateString() === d.toDateString(); return today ? hhmm(t) : d.toLocaleDateString('vi-VN', { day: '2-digit', month: '2-digit' }) + ' ' + hhmm(t); };
+const dur = ms => { const s = Math.max(0, Math.round(ms / 1000)); return s < 60 ? s + ' giây' : s < 3600 ? Math.floor(s / 60) + ' phút' : Math.floor(s / 3600) + ' giờ ' + Math.floor(s % 3600 / 60) + ' phút'; };
+const dev = v => (v.mobile ? '📱 ' : '💻 ') + v.os + ' · ' + v.browser;
+
+function row(cells) {
+  const tr = el('tr');
+  for (const c of cells) { const td = el('td', c.cls, c.text); if (c.node) td.append(c.node); tr.append(td); }
+  return tr;
+}
+function nameCell(v) {
+  const n = el('span', 'name', v.name || '(chưa đặt tên)');
+  return { node: n };
+}
+function render(d) {
+  $('tOnline').textContent = d.totals.online;
+  $('tVisits').textContent = d.totals.visits;
+  $('tIps').textContent = d.totals.uniqueIps;
+  $('tMatches').textContent = d.totals.matches;
+  $('meta').textContent = `Cập nhật ${hhmm(d.now)} · server chạy được ${dur(d.now - d.startedAt)} · dữ liệu mất khi server khởi động lại`;
+  $('dot').className = 'dot';
+
+  const on = $('online');
+  on.replaceChildren(...d.online.map(v => row([
+    nameCell(v),
+    { text: v.status, cls: v.status.startsWith('Đang đấu') ? 'st-play' : '' },
+    { text: dev(v) }, { text: v.ip, cls: 'num' }, { text: when(v.since), cls: 'num' }, { text: v.matches, cls: 'num' },
+  ])));
+  if (!d.online.length) on.append(row([{ text: 'Chưa có ai online.', cls: 'empty' }]));
+
+  const gone = $('gone');
+  gone.replaceChildren(...d.gone.map(v => row([
+    nameCell(v), { text: dev(v) }, { text: v.ip, cls: 'num' }, { text: when(v.since), cls: 'num' },
+    { text: dur(v.left - v.since), cls: 'num' }, { text: v.matches, cls: 'num' },
+  ])));
+  if (!d.gone.length) gone.append(row([{ text: 'Chưa có ai.', cls: 'empty' }]));
+
+  const ev = $('events');
+  ev.replaceChildren(...d.events.map(e => {
+    const div = el('div', 'ev'), body = el('div');
+    body.append(el('span', 'name', e.name || 'Khách'), ' ', el('span', null, e.text), ' ', el('small', null, e.ip));
+    div.append(el('time', null, hhmm(e.t)), body);
+    return div;
+  }));
+  if (!d.events.length) ev.append(el('div', 'empty', 'Chưa có gì.'));
+}
+
+async function load() {
+  let r;
+  try { r = await fetch('/admin/api', { headers: { Authorization: 'Bearer ' + key }, cache: 'no-store' }); }
+  catch { $('dot').className = 'dot off'; $('meta').textContent = 'Mất kết nối server, đang thử lại…'; return; }
+  if (r.status === 401 || r.status === 429) {
+    const msg = (await r.json().catch(() => ({}))).error || 'Sai mật khẩu';
+    return showLogin(msg);
+  }
+  render(await r.json());
+  $('login').hidden = true; $('app').hidden = false;
+}
+function start() { clearInterval(timer); load(); timer = setInterval(load, 3000); }
+function showLogin(msg) {
+  clearInterval(timer); key = null;
+  try { sessionStorage.removeItem('cl_admin'); } catch {}
+  $('app').hidden = true; $('login').hidden = false;
+  $('err').textContent = msg || '';
+  $('key').focus();
+}
+$('login').addEventListener('submit', e => {
+  e.preventDefault();
+  key = $('key').value.trim();
+  try { sessionStorage.setItem('cl_admin', key); } catch {}
+  start();
+});
+$('logout').onclick = () => showLogin('');
+if (key) start(); else showLogin('');
+</script>
+</body>
+</html>

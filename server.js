@@ -4,6 +4,7 @@ const http = require('http');
 const fs = require('fs');
 const path = require('path');
 const crypto = require('crypto');
+const track = require('./admin');   // trang theo dõi /admin
 const { CHARACTERS, BY_ID, DEFAULT_CHAR, OUTFIT_STYLES, VENUES, VENUE_BY_ID, makeMods, publicData } = require('./characters');
 
 // ================== HẰNG SỐ SÂN & VẬT LÝ ==================
@@ -33,7 +34,6 @@ const WIND_MAX = 70;                       // sân ngoài trời: gia tốc gió
 
 const MODES = {
   '1v1': [1, 1],
-  '2v2': [2, 2],
   '1v2': [1, 2],
 };
 
@@ -517,7 +517,7 @@ class Room {
   }
 }
 
-module.exports = { Room, MODES, LEVELS };
+module.exports = { Room, MODES, LEVELS };   // để chạy mô phỏng / kiểm thử
 if (require.main !== module) return;
 
 // ================== WEBSOCKET TỰ VIẾT (không cần thư viện) ==================
@@ -562,13 +562,19 @@ function wsAccept(req, socket, onMessage, onClose) {
 // ================== HTTP + PHÒNG ==================
 const PORT = process.env.PORT || 3000;
 const rooms = new Map();
+// client nằm trong public/: index.html, css/, js/ — chỉ phục vụ file trong thư mục này
+const PUBLIC = path.join(__dirname, 'public');
+const MIME = { '.html': 'text/html', '.css': 'text/css', '.js': 'text/javascript', '.png': 'image/png', '.svg': 'image/svg+xml', '.ico': 'image/x-icon' };
 const server = http.createServer((req, res) => {
-  // tìm index.html trong thư mục public/ hoặc ngay cạnh server.js
-  let file = path.join(__dirname, 'public', 'index.html');
-  if (!fs.existsSync(file)) file = path.join(__dirname, 'index.html');
+  let rel;
+  try { rel = decodeURIComponent(req.url.split('?')[0]); } catch { rel = '/'; }
+  if (track.handle(req, res, rel)) return;
+  if (rel === '/' || !path.extname(rel)) rel = '/index.html';   // /?room=... và mọi đường dẫn khác -> trang game
+  const file = path.join(PUBLIC, path.normalize(rel));
+  if (!file.startsWith(PUBLIC + path.sep)) { res.writeHead(403); return res.end(); }
   fs.readFile(file, (err, data) => {
-    if (err) { res.writeHead(500, { 'Content-Type': 'text/plain; charset=utf-8' }); return res.end('Không tìm thấy index.html (đặt trong thư mục public/ hoặc cạnh server.js)'); }
-    res.writeHead(200, { 'Content-Type': 'text/html; charset=utf-8' });
+    if (err) { res.writeHead(404, { 'Content-Type': 'text/plain; charset=utf-8' }); return res.end('Không tìm thấy ' + rel); }
+    res.writeHead(200, { 'Content-Type': (MIME[path.extname(file)] || 'application/octet-stream') + '; charset=utf-8', 'Cache-Control': 'no-cache' });
     res.end(data);
   });
 });
@@ -579,6 +585,9 @@ function newCode() {
   do { c = Array.from({ length: 4 }, () => 'ABCDEFGHJKLMNPQRSTUVWXYZ'[Math.random() * 24 | 0]).join(''); } while (rooms.has(c));
   return c;
 }
+// mô tả trận cho trang theo dõi
+const matchDesc = r => `${r.solo ? 'Giao hữu' : 'Phòng ' + r.code} ${r.mode} · Máy ${LEVELS[r.level].name} · vs ${
+  r.players.filter(p => p.team === 1).map(p => BY_ID[p.char] ? BY_ID[p.char].name : p.name).join(' & ')}`;
 function roomList() {
   return [...rooms.values()].filter(r => !r.solo).map(r => ({
     code: r.code, mode: r.mode, state: r.state, level: r.level,
@@ -589,6 +598,7 @@ function roomList() {
 server.on('upgrade', (req, socket) => {
   const id = 'u' + nextId++;
   let room = null, name = 'Khách', look = null, char = DEFAULT_CHAR, outfit = null;
+  track.connect(id, req);
   const send = wsAccept(req, socket, (txt) => {
     let m; try { m = JSON.parse(txt); } catch { return; }
     if (m.t === 'hello') {
@@ -596,6 +606,7 @@ server.on('upgrade', (req, socket) => {
       look = Array.isArray(m.look) && hex(m.look[0]) && hex(m.look[1]) ? [m.look[0], m.look[1]] : null;
       if (BY_ID[m.char]) char = m.char;
       outfit = cleanOutfit(m.outfit);
+      track.hello(id, name, char);
       send(JSON.stringify({ t: 'hi', id, rooms: roomList(), game: publicData() })); }
     else if (m.t === 'list') send(JSON.stringify({ t: 'list', rooms: roomList() }));
     else if ((m.t === 'create' || m.t === 'solo') && !room && MODES[m.mode]) {
@@ -610,22 +621,25 @@ server.on('upgrade', (req, socket) => {
         room.seat(id, 0, 0);
         if (BY_ID[m.opp]) room.makeBot(1, 0, m.opp, cleanOutfit(m.oppOutfit));   // đối thủ + trang phục chọn ở màn Giao hữu
         room.start();
-      }
+        track.activity(id, 'Đang đấu: ' + matchDesc(room), 'Bắt đầu ' + matchDesc(room), room);
+      } else track.activity(id, 'Phòng chờ ' + room.code, 'Tạo phòng mạng ' + room.code + ' (' + room.mode + ')', room);
       room.broadcast(room.lobbyInfo());
     } else if (m.t === 'demo' && !room) {
       // màn hình tiêu đề: trận toàn Máy đánh với nhau, người xem không ngồi ghế nào
-      room = new Room(newCode(), Math.random() < 0.5 ? '1v1' : '2v2', 11, id, 'hard', VENUES[Math.random() * VENUES.length | 0].id);
+      room = new Room(newCode(), '1v1', 11, id, 'hard', VENUES[Math.random() * VENUES.length | 0].id);
       room.solo = room.demo = true;
       room.clients.set(id, { name, send, look });
       room.start();
       room.intro = 0;
       rooms.set(room.code, room);
+      track.activity(id, 'Màn hình tiêu đề (xem demo)', null, null);
       send(JSON.stringify(room.lobbyInfo()));
     } else if (m.t === 'join' && !room) {
       const r = rooms.get(String(m.code || '').toUpperCase());
       if (!r) return send(JSON.stringify({ t: 'err', msg: 'Không tìm thấy phòng ' + m.code }));
       room = r;
       room.addClient(id, name, send, look, char, outfit);
+      track.activity(id, 'Phòng ' + room.code, 'Vào phòng mạng ' + room.code, room);
       room.broadcast(room.lobbyInfo());
       if (room.state !== 'lobby') send(JSON.stringify(room.snapshot()));
     } else if (!room) return;
@@ -633,7 +647,11 @@ server.on('upgrade', (req, socket) => {
     else if (m.t === 'bot' && id === room.hostId && room.state === 'lobby') { room.toggleBot(m.team | 0, m.idx | 0); room.broadcast(room.lobbyInfo()); }
     else if (m.t === 'opp' && id === room.hostId && room.solo && BY_ID[m.char] && room.state !== 'playing') { room.makeBot(1, 0, m.char); room.broadcast(room.lobbyInfo()); }
     else if (m.t === 'level' && id === room.hostId && LEVELS[m.level]) { room.level = m.level; room.broadcast(room.lobbyInfo()); }
-    else if (m.t === 'start' && id === room.hostId && room.state !== 'playing') { room.start(); room.broadcast(room.lobbyInfo()); }
+    else if (m.t === 'start' && id === room.hostId && room.state !== 'playing') {
+      room.start(); room.logged = false;
+      for (const cid of room.clients.keys()) track.activity(cid, 'Đang đấu: ' + matchDesc(room), 'Bắt đầu ' + matchDesc(room), room);
+      room.broadcast(room.lobbyInfo());
+    }
     else if (m.t === 'in') {
       const p = room.players.find(p => p.id === id);
       if (p && !p.bot && !(room.intro > 0)) {
@@ -650,10 +668,11 @@ server.on('upgrade', (req, socket) => {
       if (p && !p.bot && room.shuttle && room.shuttle.held === p && room.intro <= 0)
         p.serveReq = { kind: m.k === 'short' ? 'short' : 'long', power: Math.max(0, Math.min(1, +m.p || 0)) };
     } else if (m.t === 'leave') leave();
-  }, () => leave());
+  }, () => { leave(); track.disconnect(id); });
 
   function leave() {
     if (!room) return;
+    track.activity(id, 'Menu', room.demo ? null : room.state === 'playing' ? `Bỏ ngang trận (${room.score[0]}–${room.score[1]})` : 'Rời phòng', null);
     room.removeClient(id);
     if (room.clients.size === 0) rooms.delete(room.code);
     else room.broadcast(room.lobbyInfo());
@@ -672,6 +691,16 @@ setInterval(() => {
     // trận demo hết thì nghỉ 3 giây rồi đấu lại
     if (r.demo && r.state === 'over' && (r.demoWait = (r.demoWait || 0) + dt) > 3) { r.start(); r.intro = 0; r.demoWait = 0; }
     if (r.state !== 'lobby') r.broadcast(r.snapshot());
+    // hết trận: ghi kết quả cho từng người thật trong phòng (đội Xanh = team 0)
+    if (!r.demo && r.state === 'over' && !r.logged) {
+      r.logged = true;
+      for (const cid of r.clients.keys()) {
+        const p = r.players.find(p => p.id === cid), mine = p ? p.team : 0;
+        const [a, b] = mine === 0 ? r.score : [r.score[1], r.score[0]];
+        track.matchOver(cid, `${r.winner === mine ? '🏆 Thắng' : '❌ Thua'} ${a}–${b} · ${matchDesc(r)}`);
+        track.activity(cid, 'Xem kết quả trận');
+      }
+    }
     r.fx = [];
   }
 }, 1000 / 60);
@@ -682,4 +711,7 @@ server.listen(PORT, () => {
   const nets = require('os').networkInterfaces();
   for (const list of Object.values(nets)) for (const n of list)
     if (n.family === 'IPv4' && !n.internal) console.log('   Bạn bè cùng wifi mở: http://' + n.address + ':' + PORT);
+  console.log('🔐 Trang theo dõi: http://localhost:' + PORT + '/admin');
+  // passkey cố định (ADMIN_KEY / .admin-key) thì không in ra log, tránh lộ trên log của Render
+  console.log('   Passkey: ' + ({ env: 'lấy từ biến ADMIN_KEY', file: 'lấy từ file .admin-key' }[track.KEY_FROM] || track.KEY + '  (ngẫu nhiên, đổi mỗi lần chạy — đặt ADMIN_KEY hoặc tạo file .admin-key để cố định)'));
 });

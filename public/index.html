@@ -1,0 +1,243 @@
+<!doctype html>
+<html lang="vi">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, user-scalable=no">
+<title>Cầu Lông Online</title>
+<link rel="stylesheet" href="css/style.css">
+</head>
+<body>
+<div class="wrap">
+  <h1>🏸 Cầu Lông Online</h1>
+
+  <!-- MÀN HÌNH SẢNH -->
+  <div id="lobby" style="display:none">
+    <div class="row" style="margin-bottom:14px"><button id="toMenu">◀ Về menu</button></div>
+    <div class="card">
+      <h3 style="margin-top:0">Tạo trận mới</h3>
+      <div class="row">
+        <button class="mode on" data-m="1v1">1 vs 1</button>
+        <button class="mode" data-m="1v2">1 vs 2</button>
+        <select id="target"><option value="21">Chơi tới 21 điểm</option><option value="11">Chơi nhanh 11 điểm</option></select>
+        <select id="level"><option value="easy">Máy: Dễ</option><option value="normal" selected>Máy: Vừa</option><option value="hard">Máy: Khó</option></select>
+      </div>
+      <div class="row" style="margin-top:10px">
+        <button class="pri" id="solo">🤖 Chơi với Máy</button>
+        <button class="pri" id="create">Tạo phòng chơi với bạn</button>
+      </div>
+      <p class="mute" style="margin-bottom:0">"Chơi với Máy": vào trận ngay, bạn ở Đội Xanh, các vị trí còn lại do Máy chơi.</p>
+    </div>
+    <div class="card">
+      <h3 style="margin-top:0">Vào phòng của bạn bè</h3>
+      <div class="row">
+        <input id="code" maxlength="4" placeholder="Mã phòng (VD: ABCD)" style="text-transform:uppercase;width:200px">
+        <button class="pri" id="join">Vào phòng</button>
+        <button id="refresh">Làm mới danh sách</button>
+      </div>
+      <div class="roomlist" id="rooms"></div>
+    </div>
+    <div class="err" id="err"></div>
+  </div>
+
+  <!-- MÀN HÌNH PHÒNG CHỜ -->
+  <div id="room" style="display:none">
+    <div class="card">
+      <div class="row" style="justify-content:space-between">
+        <div><b>Phòng <span id="rcode"></span></b> · <span id="rmode"></span> · <span id="rtarget"></span> điểm · Máy <span id="rlevel"></span></div>
+        <button id="leave1">Rời phòng</button>
+      </div>
+      <p class="mute">Gửi mã phòng (hoặc link) cho bạn bè: <code id="rlink"></code><br>
+        Bấm vào ô trống để đổi chỗ. Ô trống khi bắt đầu sẽ do <b>Máy</b> chơi.</p>
+      <div class="teams">
+        <div class="team"><h3 style="color:var(--blue)">Đội Xanh</h3><div id="t0"></div></div>
+        <div class="team"><h3 style="color:var(--red)">Đội Đỏ</h3><div id="t1"></div></div>
+      </div>
+      <div class="row" style="margin-top:10px"><button class="pri" id="start">Bắt đầu!</button>
+        <select id="rlevelsel"><option value="easy">Máy: Dễ</option><option value="normal">Máy: Vừa</option><option value="hard">Máy: Khó</option></select>
+        <span class="mute" id="waithost"></span></div>
+    </div>
+  </div>
+
+  <button id="sndBtn" title="Bật/tắt âm thanh (M)" aria-label="Bật/tắt âm thanh"></button>
+  <!-- MÀN HÌNH CHƠI -->
+  <div id="game">
+    <div class="hud">
+      <div class="score"><span class="b" id="s0">0</span> : <span class="r" id="s1">0</span></div>
+      <div class="row"><button id="again" style="display:none" class="pri">Chơi lại</button><button id="leave2">Rời phòng</button></div>
+    </div>
+    <div class="stam"><div class="st-team" id="st0"></div><div class="st-team r" id="st1"></div></div>
+    <canvas id="cv" width="1000" height="500"></canvas>
+    <div class="keys mute">
+      <b>Chuột:</b>
+      <span><kbd>A</kbd><kbd>D</kbd> chạy</span>
+      <span><kbd>Space</kbd> nhảy</span>
+      <span><kbd>Click</kbd> đánh</span>
+      <span><kbd>Ctrl</kbd>+<kbd>Click</kbd> bỏ nhỏ</span>
+      <span>nhảy + <kbd>Click</kbd> = đập</span>
+    </div>
+    <div class="keys mute">
+      <b>Giao cầu:</b>
+      <span><kbd>Click</kbd> / <kbd>Z</kbd> giao gần</span>
+      <span><kbd>Ctrl</kbd>+<kbd>Click</kbd> / <kbd>X</kbd> phông xa</span>
+      <span>giữ lâu = mạnh hơn (gần mà yếu quá thì chạm lưới, xa mà mạnh quá thì ra ngoài)</span>
+    </div>
+    <div class="keys mute">
+      <b>Bàn phím:</b>
+      <span><kbd>◀</kbd><kbd>▶</kbd> chạy</span>
+      <span><kbd>Z</kbd> đánh</span>
+      <span><kbd>X</kbd> bỏ nhỏ</span>
+      <span><kbd>C</kbd> đập</span>
+    </div>
+    <div class="touch">
+      <div><button data-k="l">◀</button><button data-k="r">▶</button></div>
+      <div><button data-s="2" title="Bỏ nhỏ">🪶</button><button data-s="3" title="Nhảy đập">💥</button><button data-s="1" title="Đánh">🏸</button></div>
+    </div>
+  </div>
+</div>
+
+<!-- MENU CHÍNH: CHỌN CHẾ ĐỘ CHƠI -->
+<!-- nhập tên: hiện lần đầu vào menu, hoặc bấm vào tên ở menu để đổi -->
+<form class="nm-dlg" id="nameDlg" hidden>
+  <div class="nm-logo">CẦU LÔNG<span>ONLINE 🏸</span></div>
+  <div class="nm-box">
+    <div class="nm-title">ĐĂNG KÝ TUYỂN THỦ</div>
+    <label for="nmInput">Tên của bạn</label>
+    <input id="nmInput" maxlength="12" autocomplete="nickname" placeholder="Tối đa 12 ký tự" required>
+    <div class="nm-err" id="nmErr"></div>
+    <div class="nm-row"><button type="button" id="nmCancel">Huỷ</button><button type="submit" class="nm-ok">XÁC NHẬN ▶</button></div>
+  </div>
+</form>
+<div id="menu" style="display:none">
+  <button class="m-me" id="meChip" type="button" title="Đổi tên">👤 <span id="meName"></span> ✎</button>
+  <canvas class="m-hero" id="hero" width="360" height="620"></canvas>
+  <div class="m-body">
+    <div class="m-logo">CẦU LÔNG<span>ONLINE 🏸</span></div>
+    <div class="m-sub" id="mSub"></div>
+    <ul class="m-list" id="mList"></ul>
+  </div>
+  <div class="m-panel" id="mPanel" hidden>
+    <div class="card" id="pnEdit" hidden>
+      <h3 style="margin-top:0">Thông tin tuyển thủ</h3>
+      <div class="pcard">
+        <canvas id="pview" width="150" height="190"></canvas>
+        <div class="fields">
+          <div class="row"><b>Tên:</b> <input id="name" maxlength="12" placeholder="Nhập tên"></div>
+          <div class="sw" id="swHair"><b>Tóc:</b></div>
+          <div class="sw" id="swSkin"><b>Da:</b></div>
+        </div>
+      </div>
+    </div>
+    <div class="card" id="pnHelp" hidden>
+      <h3 style="margin-top:0">Cách điều khiển</h3>
+      <div class="keys"><b>Chuột:</b> <span><kbd>A</kbd><kbd>D</kbd> chạy</span> <span><kbd>Space</kbd> nhảy</span>
+        <span><kbd>Click</kbd> đánh</span> <span><kbd>Ctrl</kbd>+<kbd>Click</kbd> bỏ nhỏ</span> <span>nhảy + <kbd>Click</kbd> = đập</span></div>
+      <div class="keys"><b>Giao cầu:</b> <span><kbd>Click</kbd>/<kbd>Z</kbd> giao gần</span> <span><kbd>Ctrl</kbd>+<kbd>Click</kbd>/<kbd>X</kbd> phông xa</span> <span>giữ lâu = mạnh hơn</span> <span><kbd>M</kbd> bật/tắt tiếng</span></div>
+      <div class="keys"><b>Bàn phím:</b> <span><kbd>◀</kbd><kbd>▶</kbd> chạy</span> <span><kbd>Z</kbd> đánh</span>
+        <span><kbd>X</kbd> bỏ nhỏ</span> <span><kbd>C</kbd> đập</span></div>
+      <p class="mute" style="margin:8px 0 0"><b>Thể lực:</b> tụt theo quãng đường chạy, mỗi cú đánh, mỗi cú nhảy / nhảy đập. Đuối sức: chạy chậm (tới −35%), nhảy thấp, đập yếu và lệch, vung vợt chậm. Dưới 12% là <b>KIỆT SỨC</b> — không nhảy được. Sau mỗi điểm chỉ hồi một ít, và <b>mức tối đa giảm dần theo trận</b> (mệt tích luỹ — phần sọc đỏ trên thanh).</p>
+      <div class="keys"><b>Cảm ứng:</b> <span>◀ ▶ chạy</span> <span>🏸 đánh</span> <span>🪶 bỏ nhỏ</span> <span>💥 nhảy đập</span></div>
+      <p class="mute" style="margin-bottom:0">Trong menu: <kbd>▲</kbd><kbd>▼</kbd> chọn, <kbd>◀</kbd><kbd>▶</kbd> đổi giá trị, <kbd>Enter</kbd> xác nhận, <kbd>Esc</kbd> quay lại.</p>
+    </div>
+  </div>
+  <!-- GIAO HỮU / CÚP: thiết lập trận (bảng) -->
+  <div class="wz" id="wzRules" hidden>
+    <div class="wz-head"><span id="ptHead">THIẾT LẬP TRẬN ĐẤU</span> <small id="ptStep"></small></div>
+    <div class="pt">
+      <div class="pt-title" id="ptTitle"></div>
+      <div class="pt-rows" id="ptRows"></div>
+      <div class="pt-desc" id="ptDesc"></div>
+    </div>
+    <div class="wz-foot"><button class="back">◀ Quay lại</button><span class="wz-hint">▲▼ chọn mục · ◀▶ đổi giá trị · Enter tiếp tục</span><button class="ok">Tiếp ▶</button></div>
+  </div>
+  <!-- GIAO HỮU: 1) chọn nhân vật (châu lục + danh sách + chỉ số) -->
+  <div class="wz" id="wzCont" hidden>
+    <div class="wz-head">CHỌN NHÂN VẬT <small>Giao hữu · bước 2/4</small></div>
+    <div class="wz-sides three">
+      <div class="wz-side" id="wzCont0"><div class="wz-label">BẠN</div><div class="ct-grid"></div><div class="ct-roster"></div></div>
+      <div class="wz-mid">
+        <div class="mid-box"><div class="wz-label">CHỈ SỐ · BẠN</div><div class="pp" id="pp0"><canvas class="pp-3d"></canvas><canvas class="pp-2d" width="150" height="170"></canvas><div class="pp-stripe"></div><div class="pp-emb"></div><div class="pp-info"></div></div><div class="ccard wz-card" id="midMe"></div></div>
+        <div class="mid-box"><div class="wz-label">CHỈ SỐ · ĐỐI THỦ</div><div class="pp" id="pp1"><canvas class="pp-3d"></canvas><canvas class="pp-2d" width="150" height="170"></canvas><div class="pp-stripe"></div><div class="pp-emb"></div><div class="pp-info"></div></div><div class="ccard wz-card" id="midOpp"></div></div>
+      </div>
+      <div class="wz-side" id="wzCont1"><div class="wz-label">ĐỐI THỦ</div><div class="ct-grid"></div><div class="ct-roster"></div></div>
+    </div>
+    <div class="wz-foot"><button class="back">◀ Quay lại</button><span class="wz-hint">Tab đổi bên · ◀▶ đổi châu lục · ▲▼ chọn tay vợt · bấm đúp để sang bước sau</span><button class="ok">Tiếp ▶</button></div>
+  </div>
+  <!-- GIAO HỮU: 2) chọn trang phục (2 bên) -->
+  <div class="wz" id="wzOutfit" hidden>
+    <div class="wz-head">CHỌN TRANG PHỤC <small>Giao hữu · bước 3/4</small></div>
+    <div class="ks">
+      <div class="ks-bar"><span>BẠN</span><span>ĐỐI THỦ</span></div>
+      <div class="ks-vs"><div class="ks-name" id="ksName0"></div><span class="ks-vsx">VS</span><div class="ks-name r" id="ksName1"></div></div>
+      <div class="ks-mid">
+        <div class="ks-emb" id="ksEmb0"></div>
+        <canvas id="ksRadar" width="280" height="220"></canvas>
+        <div class="ks-emb" id="ksEmb1"></div>
+      </div>
+      <div class="ks-title">CHỌN TRANG PHỤC</div>
+      <div class="ks-kits">
+        <canvas class="ks-kit" id="ksKit0" width="110" height="185" title="Bấm để đổi bộ của bạn"></canvas>
+        <div class="ks-sel"><button id="ksPrev" aria-label="Bộ trước">◀</button><span id="ksText"></span><button id="ksNext" aria-label="Bộ sau">▶</button><small id="ksSub"></small>
+          <div class="ks-custom" id="ksCustom" hidden>
+            <div><h4>KIỂU</h4><div class="of-styles" id="ofStyles"></div></div>
+            <div><h4>MÀU ÁO</h4><div class="sw" id="ofC1"></div><h4 id="ofC2Label">MÀU QUẦN</h4><div class="sw" id="ofC2"></div></div>
+          </div>
+        </div>
+        <canvas class="ks-kit" id="ksKit1" width="110" height="185" title="Bấm để đổi bộ của đối thủ"></canvas>
+      </div>
+    </div>
+    <div class="wz-foot"><button class="back">◀ Quay lại</button><span class="wz-hint"><b id="ksCount"></b> · ◀▶ đổi bộ · bấm vào bộ đồ để đổi riêng từng bên</span><button class="ok">Tiếp ▶</button></div>
+  </div>
+  <!-- GIAO HỮU: 3) sân thi đấu -->
+  <div class="wz" id="wzVenue" hidden>
+    <div class="wz-head">SÂN THI ĐẤU <small>Giao hữu · bước 4/4</small></div>
+    <div class="wz-venues" id="vnList"></div>
+    <div class="wz-foot"><button class="back">◀ Quay lại</button><span class="wz-hint">◀▶ chọn sân · Enter bắt đầu</span><button class="ok">BẮT ĐẦU ▶</button></div>
+  </div>
+  <div class="m-ticker"><span id="mDesc"></span></div>
+</div>
+
+<!-- MÀN GIỚI THIỆU NGƯỜI LÀM -->
+<div id="splash" hidden>
+  <div id="spStage"></div>
+  <div class="sp-skip">Nhấn phím bất kỳ để bỏ qua</div>
+</div>
+
+<!-- MÀN TIÊU ĐỀ + GAMEPLAY DEMO -->
+<div id="title" hidden>
+  <div class="sp-logo">🏸 CẦU LÔNG ONLINE</div>
+  <div class="t-demo" id="tdemo"><span class="t-tag">DEMO</span></div>
+  <div class="t-press">NHẤN PHÍM BẤT KỲ</div>
+</div>
+
+<!-- MÀN HÌNH LOADING TRƯỚC TRẬN -->
+<div id="loading" hidden>
+  <div class="ld-top"><span class="ld-tag">🏸 CẦU LÔNG ONLINE</span><span class="ld-info" id="ldInfo"></span></div>
+  <div class="ld-venue" id="ldVenue"></div>
+  <div class="ld-mid">
+    <div class="ld-team blue"><div class="ld-tname">ĐỘI XANH</div><ul id="ld0"></ul></div>
+    <div class="ld-vs">VS</div>
+    <div class="ld-team red"><div class="ld-tname">ĐỘI ĐỎ</div><ul id="ld1"></ul></div>
+  </div>
+  <div class="ld-bottom">
+    <div class="ld-tip"><b>MẸO</b><span id="ldTip"></span></div>
+    <div class="ld-bar"><div id="ldFill"></div></div>
+    <div class="ld-pct"><span class="ld-spin">🏸</span> LOADING... <span id="ldPct">0</span>%</div>
+  </div>
+</div>
+
+<!-- thứ tự nạp quan trọng: các file dùng chung biến toàn cục, boot.js chạy cuối cùng để mở kết nối & vòng vẽ -->
+<script src="js/net.js"></script>
+<script src="js/audio.js"></script>
+<script src="js/lobby.js"></script>
+<script src="js/hud.js"></script>
+<script src="js/controls.js"></script>
+<script src="js/render.js"></script>
+<script src="js/menu.js"></script>
+<script src="js/wizard.js"></script>
+<script src="js/boot.js"></script>
+
+<!-- ================== CHÂN DUNG 3D (Three.js) ở màn chọn nhân vật ================== -->
+<script type="importmap">{ "imports": { "three": "https://cdn.jsdelivr.net/npm/three@0.170.0/build/three.module.js" } }</script>
+<script type="module" src="js/portrait3d.js"></script>
+</body>
+</html>
